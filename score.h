@@ -14,7 +14,10 @@ ErrorCode parse_file_score(const std::string& text, double& out);
 // Returns the integer tenths value of a score, computed as lround(score * 10).
 long long to_tenths(double score);
 
-// Returns true if the score lies in [0.0, 100.0], checked in tenths.
+// Rounds a finite score half up to one decimal place; returns the stored form tenths / 10.0.
+double round_score(double score);
+
+// Returns true if the score is finite and lies in [0.0, 100.0], checked in tenths.
 bool is_score_in_range(double score);
 
 // Compares two scores in tenths; returns -1, 0 or 1.

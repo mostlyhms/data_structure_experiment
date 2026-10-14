@@ -83,9 +83,17 @@ long long to_tenths(double score) {
     return static_cast<long long>(std::lround(score * 10.0));
 }
 
+// Rounds a score to one decimal place through its tenths value.
+// score: a finite score; returns tenths / 10.0, the only form in which scores are stored.
+double round_score(double score) {
+    return from_tenths(to_tenths(score));
+}
+
 // Checks that a score is within the allowed range, comparing in tenths.
-// score: value to check; returns true if 0 <= tenths <= 1000.
+// score: value to check; returns true if it is finite and 0 <= tenths <= 1000.
 bool is_score_in_range(double score) {
+    // Overflow guard, not the range check: NaN, infinity and huge values have no defined lround result.
+    if (!std::isfinite(score) || std::fabs(score) > 1e6) return false;
     const long long t = to_tenths(score);
     return t >= 0 && t <= 1000;
 }

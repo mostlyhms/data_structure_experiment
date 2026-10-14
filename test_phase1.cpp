@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -133,6 +134,15 @@ void test_format_and_compare() {
     expect(compare_score(100.0, 99.9) == 1, "compare 100.0 > 99.9");
     expect(is_score_in_range(0.0) && is_score_in_range(100.0), "range boundaries accepted");
     expect(!is_score_in_range(100.1) && !is_score_in_range(-0.1), "range outside rejected");
+    expect(!is_score_in_range(std::numeric_limits<double>::quiet_NaN()), "NaN rejected");
+    expect(!is_score_in_range(std::numeric_limits<double>::infinity()), "inf rejected");
+    expect(!is_score_in_range(-std::numeric_limits<double>::infinity()), "-inf rejected");
+    expect(!is_score_in_range(1e300), "huge value rejected");
+
+    expect(format_score(round_score(85.04)) == "85.0", "round 85.04 -> 85.0");
+    expect(format_score(round_score(85.06)) == "85.1", "round 85.06 -> 85.1");
+    expect(format_score(round_score(85.55)) == "85.6", "round 85.55 -> 85.6");
+    expect(format_score(round_score(99.96)) == "100.0", "round 99.96 -> 100.0");
 }
 
 // Tests student id validation rules.
