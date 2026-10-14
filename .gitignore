@@ -1,1 +1,51 @@
+# ===== macOS 系统文件 =====
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# ===== CLion / JetBrains =====
 .idea/
+cmake-build-*/
+
+# ===== 其他编辑器 =====
+.vscode/
+*.swp
+*~
+
+# ===== CMake 构建产物（在项目根目录直接构建时产生）=====
+build/
+out/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+compile_commands.json
+CMakeUserPresets.json
+build.ninja
+.ninja_*
+Makefile
+
+# ===== 编译产物 =====
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.exe
+*.out
+*.dSYM/
+
+# 用 g++ 在根目录直接编译出的可执行文件
+/student_manager
+/test_phase1
+/test_phase2
+/test_phase3
+
+# ===== 程序运行时生成的数据文件 =====
+students.txt
+*.tmp
+
+# ===== 实验报告截图（如不想上传，去掉下一行开头的 # ）=====
+# 测试截图/

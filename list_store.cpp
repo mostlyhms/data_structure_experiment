@@ -20,20 +20,28 @@ ErrorCode ListStore::init(const std::string& path) {
     return ErrorCode::OK;
 }
 
-// Loads path all-or-nothing and replaces the list with the loaded records.
+// Loads path all-or-nothing and replaces the list with the loaded records in file order.
 // path: file to read; error_line: receives the bad line on format errors. Returns the load result.
 ErrorCode ListStore::load(const std::string& path, std::size_t& error_line) {
     std::vector<Student> records;
     const ErrorCode code = load_records(path, records, error_line);
     if (code != ErrorCode::OK) return code;
+    return import_records(records, path);
+}
+
+// Validates all records first, then replaces the list with them in the given order (scores rounded).
+// records: new contents; path: file bound for later saves, not touched here. Returns OK or the first failure.
+ErrorCode ListStore::import_records(const std::vector<Student>& records, const std::string& path) {
+    const ErrorCode code = validate_student_records(records);
+    if (code != ErrorCode::OK) return code;
     clear_nodes();
-    for (const Student& s : records) append(s);
+    for (const Student& s : records) append(Student{s.id, s.name, round_score(s.score)});
     path_ = path;
     initialized_ = true;
     return ErrorCode::OK;
 }
 
-// Writes all records, in list order, to the file chosen by init or load.
+// Writes all records, in list order, to the file bound by init, load or import_records.
 // Returns NOT_INITIALIZED, or the result of save_records.
 ErrorCode ListStore::save() {
     std::vector<Student> records;

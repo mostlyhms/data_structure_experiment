@@ -1,5 +1,9 @@
 #include "validate.h"
 
+#include <set>
+
+#include "score.h"
+
 namespace {
 
 // Returns true if c is an ASCII digit.
@@ -36,5 +40,20 @@ ErrorCode validate_student_name(const std::string& name) {
     }
     if (name.find_first_not_of(' ') == std::string::npos) return ErrorCode::NAME_EMPTY;
     if (name.size() > 50) return ErrorCode::NAME_TOO_LONG;
+    return ErrorCode::OK;
+}
+
+// Validates a batch of records as one unit, e.g. before replacing a store's contents.
+// records: records to check. Returns OK, the first id/name failure, SCORE_OUT_OF_RANGE or ID_DUPLICATE.
+ErrorCode validate_student_records(const std::vector<Student>& records) {
+    std::set<std::string> seen_ids;
+    for (const Student& s : records) {
+        ErrorCode code = validate_student_id(s.id);
+        if (code != ErrorCode::OK) return code;
+        code = validate_student_name(s.name);
+        if (code != ErrorCode::OK) return code;
+        if (!is_score_in_range(s.score)) return ErrorCode::SCORE_OUT_OF_RANGE;
+        if (!seen_ids.insert(s.id).second) return ErrorCode::ID_DUPLICATE;
+    }
     return ErrorCode::OK;
 }

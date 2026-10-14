@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <string>
@@ -27,8 +28,18 @@ void expect(bool ok, const std::string& label) {
     ++g_checks;
     if (!ok) {
         ++g_failures;
-        std::printf("FAIL: %s\n", label.c_str());
+        std::printf("  失败：%s\n", label.c_str());
     }
+}
+
+// Runs one group of checks and prints a one-line pass/fail summary for it.
+// name: group title shown in the output; body: function that performs the checks.
+void run_group(const std::string& name, const std::function<void()>& body) {
+    const int checks_before = g_checks;
+    const int failures_before = g_failures;
+    body();
+    const int failures = g_failures - failures_before;
+    std::printf("[%s] %s（%d 项检查）\n", failures == 0 ? "通过" : "失败", name.c_str(), g_checks - checks_before);
 }
 
 // Returns a string of n Chinese characters, 3 bytes each in UTF-8.
@@ -250,17 +261,18 @@ void test_storage(const fs::path& dir) {
 // Runs all phase 1 tests and prints a summary.
 // Returns 0 when every check passes, 1 otherwise.
 int main() {
-    test_input_score();
-    test_file_score();
-    test_format_and_compare();
-    test_id();
-    test_name();
-
+    std::printf("阶段一单元测试：成绩解析、学号/姓名校验、文件存储\n");
     const fs::path dir = fs::temp_directory_path() / "phase1_tests";
     fs::create_directories(dir);
-    test_storage(dir);
-    fs::remove_all(dir);
 
-    std::printf("%d checks, %d failures\n", g_checks, g_failures);
+    run_group("成绩输入解析（宽松规则，字符串十进制四舍五入）", test_input_score);
+    run_group("成绩文件解析（严格规则）", test_file_score);
+    run_group("成绩十分位比较、范围检查、舍入与格式化", test_format_and_compare);
+    run_group("学号校验", test_id);
+    run_group("姓名校验", test_name);
+    run_group("文件保存与加载（临时文件替换、全有或全无）", [&] { test_storage(dir); });
+
+    fs::remove_all(dir);
+    std::printf("合计：%d 项检查，%d 项失败\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

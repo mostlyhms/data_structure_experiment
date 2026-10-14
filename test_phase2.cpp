@@ -7,6 +7,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -34,8 +35,18 @@ void expect(bool ok, const std::string& label) {
     ++g_checks;
     if (!ok) {
         ++g_failures;
-        std::printf("FAIL: %s\n", label.c_str());
+        std::printf("  失败：%s\n", label.c_str());
     }
+}
+
+// Runs one group of checks and prints a one-line pass/fail summary for it.
+// name: group title shown in the output; body: function that performs the checks.
+void run_group(const std::string& name, const std::function<void()>& body) {
+    const int checks_before = g_checks;
+    const int failures_before = g_failures;
+    body();
+    const int failures = g_failures - failures_before;
+    std::printf("[%s] %s（%d 项检查）\n", failures == 0 ? "通过" : "失败", name.c_str(), g_checks - checks_before);
 }
 
 // Reads a whole file as raw bytes.
@@ -63,6 +74,12 @@ std::unique_ptr<StudentStore> make_store(int kind) {
 // kind: 0 for list, 1 for BST.
 std::string kind_name(int kind) {
     return kind == 0 ? "list" : "bst";
+}
+
+// Returns the Chinese label of a store kind for the test report.
+// kind: 0 for list, 1 for BST.
+std::string kind_label(int kind) {
+    return kind == 0 ? "单链表" : "BST";
 }
 
 // Returns the number of records in a store, or -1 if count fails.
@@ -236,6 +253,42 @@ void test_add_rounding(int kind, const fs::path& dir) {
             expect(st->find(c.id, s) == ErrorCode::ID_NOT_FOUND, tag + ": rejected id " + c.id + " absent");
         }
     }
+}
+
+// import_records validates all-or-nothing, initializes the store, rounds scores, and never touches the file.
+// kind: store kind to test; dir: scratch directory.
+void test_import(int kind, const fs::path& dir) {
+    const std::string tag = kind_name(kind) + " import";
+    const fs::path file = dir / (kind_name(kind) + "_import.txt");
+    fs::remove(file);
+    auto st = make_store(kind);
+
+    const std::vector<Student> good = {{"12", "张三", 85.5}, {"7", "Tom Li", 100.04}, {"100", "c", 0.0}};
+    expect(st->import_records(good, file.string()) == ErrorCode::OK, tag + ": import into uninitialized store");
+    expect(!fs::exists(file), tag + ": import does not create the file");
+    expect(count_of(*st) == 3, tag + ": count after import");
+    Student s;
+    expect(st->find("7", s) == ErrorCode::OK && format_score(s.score) == "100.0" && is_canonical(s.score),
+           tag + ": imported score rounded");
+    if (kind == 0) {
+        expect(ids_of(*st) == std::vector<std::string>{"12", "7", "100"}, tag + ": list keeps given order");
+    } else {
+        expect(ids_of(*st) == std::vector<std::string>{"100", "12", "7"}, tag + ": bst sorted by id");
+    }
+
+    const std::vector<Student> before = records_of(*st);
+    const std::vector<Student> dup = {{"1", "a", 1.0}, {"1", "b", 2.0}};
+    expect(st->import_records(dup, file.string()) == ErrorCode::ID_DUPLICATE, tag + ": duplicate rejected");
+    const std::vector<Student> bad_name = {{"1", "a", 1.0}, {"2", "", 2.0}};
+    expect(st->import_records(bad_name, file.string()) == ErrorCode::NAME_EMPTY, tag + ": bad name rejected");
+    const std::vector<Student> bad_score = {{"1", "a", 100.5}};
+    expect(st->import_records(bad_score, file.string()) == ErrorCode::SCORE_OUT_OF_RANGE,
+           tag + ": bad score rejected");
+    expect(same_records(records_of(*st), before), tag + ": data untouched after failed imports");
+
+    expect(st->save() == ErrorCode::OK && fs::exists(file), tag + ": save writes to the bound path");
+    expect(st->import_records({}, file.string()) == ErrorCode::OK && count_of(*st) == 0,
+           tag + ": import empty list");
 }
 
 // Init must clear both memory and the file, even when the store already holds data.
@@ -416,7 +469,7 @@ void run_bench(const fs::path& dir) {
         for (const std::string& id : ids) st->find(id, s);
         const auto t2 = clock::now();
 
-        std::printf("%s: %zu records, add %lld ms, find %lld ms\n", kind_name(kind).c_str(),
+        std::printf("性能 · %s：%zu 条记录，添加 %lld ms，查找 %lld ms\n", kind_label(kind).c_str(),
                     static_cast<std::size_t>(count_of(*st)),
                     static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()),
                     static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count()));
@@ -428,29 +481,34 @@ void run_bench(const fs::path& dir) {
 // Runs all phase 2 tests and prints a summary; "--bench" also runs the timing.
 // Returns 0 when every check passes, 1 otherwise.
 int main(int argc, char** argv) {
+    std::printf("阶段二单元测试：单链表与 BST 两套存储实现\n");
     const fs::path dir = fs::temp_directory_path() / "phase2_tests";
     fs::remove_all(dir);
     fs::create_directories(dir);
 
     for (int kind = 0; kind < 2; ++kind) {
-        test_before_init(kind, dir);
-        test_empty_and_single(kind, dir);
-        test_invalid_inputs(kind, dir);
-        test_add_rounding(kind, dir);
-        test_init_clears(kind, dir);
-        test_order(kind, dir);
-        test_corrupt_keeps_state(kind, dir);
-        test_delete_shapes(kind, dir);
+        const std::string k = kind_label(kind) + " · ";
+        run_group(k + "未初始化时拒绝操作", [&] { test_before_init(kind, dir); });
+        run_group(k + "空表与单条记录", [&] { test_empty_and_single(kind, dir); });
+        run_group(k + "非法输入拒绝", [&] { test_invalid_inputs(kind, dir); });
+        run_group(k + "添加时成绩舍入", [&] { test_add_rounding(kind, dir); });
+        run_group(k + "批量导入", [&] { test_import(kind, dir); });
+        run_group(k + "初始化清空内存与文件", [&] { test_init_clears(kind, dir); });
+        run_group(k + "遍历顺序", [&] { test_order(kind, dir); });
+        run_group(k + "损坏文件加载不改变数据", [&] { test_corrupt_keeps_state(kind, dir); });
+        run_group(k + "各种形态的删除", [&] { test_delete_shapes(kind, dir); });
     }
-    test_save_load(0, 0, dir);
-    test_save_load(0, 1, dir);
-    test_save_load(1, 0, dir);
-    test_save_load(1, 1, dir);
-    test_random_crosscheck(dir);
+    for (int from = 0; from < 2; ++from) {
+        for (int to = 0; to < 2; ++to) {
+            run_group("保存/加载往返 · " + kind_label(from) + " 保存 → " + kind_label(to) + " 加载",
+                      [&] { test_save_load(from, to, dir); });
+        }
+    }
+    run_group("随机操作交叉比对（5000 步，两套实现结果一致）", [&] { test_random_crosscheck(dir); });
 
     if (argc > 1 && std::string(argv[1]) == "--bench") run_bench(dir);
 
     fs::remove_all(dir);
-    std::printf("%d checks, %d failures\n", g_checks, g_failures);
+    std::printf("合计：%d 项检查，%d 项失败\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

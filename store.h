@@ -9,7 +9,7 @@
 #include "student.h"
 
 // Common interface of the two storage implementations (linked list and BST).
-// Until init or load succeeds, every operation except init and load returns NOT_INITIALIZED.
+// Until init, load or import_records succeeds, every other operation returns NOT_INITIALIZED.
 class StudentStore {
 public:
     virtual ~StudentStore() = default;
@@ -20,7 +20,10 @@ public:
     // Loads path all-or-nothing and replaces memory; error_line receives the bad line on format errors.
     virtual ErrorCode load(const std::string& path, std::size_t& error_line) = 0;
 
-    // Writes all records to the file given to init or load.
+    // Replaces memory with records (validated all-or-nothing) and binds path; the file itself is not touched.
+    virtual ErrorCode import_records(const std::vector<Student>& records, const std::string& path) = 0;
+
+    // Writes all records to the file given to init, load or import_records.
     virtual ErrorCode save() = 0;
 
     // Adds a record; the score is rounded to one decimal, range-checked, then stored. ID_DUPLICATE if the id exists.

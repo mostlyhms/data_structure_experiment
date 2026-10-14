@@ -20,6 +20,7 @@ public:
 
     ErrorCode init(const std::string& path) override;
     ErrorCode load(const std::string& path, std::size_t& error_line) override;
+    ErrorCode import_records(const std::vector<Student>& records, const std::string& path) override;
     ErrorCode save() override;
     ErrorCode add(const std::string& id, const std::string& name, double score) override;
     ErrorCode find(const std::string& id, Student& out) const override;

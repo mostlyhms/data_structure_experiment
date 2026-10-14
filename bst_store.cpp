@@ -22,25 +22,37 @@ ErrorCode BstStore::init(const std::string& path) {
     return ErrorCode::OK;
 }
 
-// Loads path all-or-nothing, then rebuilds a balanced tree from the records sorted by id.
-// Building from sorted data avoids the degenerate tree that sequential inserts would create.
+// Loads path all-or-nothing and replaces the tree with the loaded records.
 // path: file to read; error_line: receives the bad line on format errors. Returns the load result.
 ErrorCode BstStore::load(const std::string& path, std::size_t& error_line) {
     std::vector<Student> records;
     const ErrorCode code = load_records(path, records, error_line);
     if (code != ErrorCode::OK) return code;
+    return import_records(records, path);
+}
 
-    std::sort(records.begin(), records.end(),
+// Validates all records first, then rebuilds a balanced tree from them sorted by id (scores rounded).
+// Building from sorted data avoids the degenerate tree that inserting a saved (sorted) file would create.
+// records: new contents; path: file bound for later saves, not touched here. Returns OK or the first failure.
+ErrorCode BstStore::import_records(const std::vector<Student>& records, const std::string& path) {
+    const ErrorCode code = validate_student_records(records);
+    if (code != ErrorCode::OK) return code;
+
+    std::vector<Student> sorted;
+    sorted.reserve(records.size());
+    for (const Student& s : records) sorted.push_back(Student{s.id, s.name, round_score(s.score)});
+    std::sort(sorted.begin(), sorted.end(),
               [](const Student& a, const Student& b) { return a.id < b.id; });
+
     clear_nodes();
-    root_ = build_balanced(records, 0, records.size());
-    size_ = records.size();
+    root_ = build_balanced(sorted, 0, sorted.size());
+    size_ = sorted.size();
     path_ = path;
     initialized_ = true;
     return ErrorCode::OK;
 }
 
-// Writes all records, in ascending id order, to the file chosen by init or load.
+// Writes all records, in ascending id order, to the file bound by init, load or import_records.
 // Returns NOT_INITIALIZED, or the result of save_records.
 ErrorCode BstStore::save() {
     std::vector<Student> records;
